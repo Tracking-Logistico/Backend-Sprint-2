@@ -20,7 +20,8 @@ import org.springframework.stereotype.Component;
 public final class TransporteHttpCliente implements TransporteHttp {
     private static final Set<String> NO_REENVIAR = Set.of(
             "host", "connection", "content-length", "transfer-encoding", "keep-alive",
-            "proxy-authenticate", "proxy-authorization", "te", "trailer", "upgrade", "expect");
+            "proxy-authenticate", "proxy-authorization", "te", "trailer", "upgrade", "expect",
+            "origin");
     private static final Set<String> NO_RESPONDER = Set.of(
             "connection", "content-length", "transfer-encoding", "keep-alive", "trailer",
             "upgrade", "access-control-allow-origin", "access-control-allow-credentials",

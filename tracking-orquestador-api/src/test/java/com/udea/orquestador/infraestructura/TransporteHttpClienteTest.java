@@ -37,4 +37,33 @@ class TransporteHttpClienteTest {
             assertEquals("attachment; filename=historial.pdf", salida.getHeader("Content-Disposition"));
         } finally { servidor.stop(0); }
     }
+
+    @Test void noReenviaOriginAlBackendPeroConservaAutorizacion() throws Exception {
+        HttpServer servidor = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        java.util.concurrent.atomic.AtomicReference<String> originRecibido = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<String> authorizationRecibido = new java.util.concurrent.atomic.AtomicReference<>();
+        servidor.createContext("/api/v1/clientes/registro", intercambio -> {
+            originRecibido.set(intercambio.getRequestHeaders().getFirst("Origin"));
+            authorizationRecibido.set(intercambio.getRequestHeaders().getFirst("Authorization"));
+            intercambio.getRequestBody().readAllBytes();
+            byte[] datos = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
+            intercambio.getResponseHeaders().add("Content-Type", "application/json");
+            intercambio.sendResponseHeaders(201, datos.length);
+            try (var salida = intercambio.getResponseBody()) { salida.write(datos); }
+        });
+        servidor.start();
+        try {
+            MockHttpServletRequest entrada = new MockHttpServletRequest("POST", "/api/v1/clientes/registro");
+            entrada.addHeader("Origin", "https://logistrack-frontend-demo.onrender.com");
+            entrada.addHeader("Authorization", "Bearer token-de-prueba");
+            entrada.addHeader("Content-Type", "application/json");
+            entrada.setContent("{\"nombre\":\"Prueba\"}".getBytes(StandardCharsets.UTF_8));
+            MockHttpServletResponse salida = new MockHttpServletResponse();
+            new TransporteHttpCliente(1000, 2000).reenviar(
+                    URI.create("http://127.0.0.1:" + servidor.getAddress().getPort()), entrada, salida);
+            assertEquals(201, salida.getStatus());
+            assertNull(originRecibido.get(), "CORS del navegador se resuelve en el gateway, no en los servicios internos");
+            assertEquals("Bearer token-de-prueba", authorizationRecibido.get());
+        } finally { servidor.stop(0); }
+    }
 }
