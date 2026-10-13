@@ -1,0 +1,8 @@
+PowerShell (dentro de tracking-rutas-api):
+Copy-Item .env.example .env
+# Editar .env con credenciales reales y usar los mismos DB_PASSWORD/RABBITMQ_PASSWORD en los tres proyectos
+
+docker compose -p tracking-logistico up -d --build
+.\mvnw.cmd -pl api -am -DskipTests clean package
+.\mvnw.cmd -pl api -am test
+java -jar api\target\tracking-rutas-api-0.0.1-SNAPSHOT.jar

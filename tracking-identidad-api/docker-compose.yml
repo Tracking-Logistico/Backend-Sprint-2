@@ -1,0 +1,81 @@
+name: tracking-logistico
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-tracking_psep}
+      POSTGRES_USER: ${DB_USER:-tracking_psep_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - tracking_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-tracking}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD en .env}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - tracking_rabbitdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+  identidad:
+    build: .
+    ports:
+      - "127.0.0.1:8081:8081"
+    environment:
+      SPRING_PROFILE: postgres
+      SPRING_PROFILES_ACTIVE: postgres
+      PORT: 8081
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-tracking_psep}
+      DB_USER: ${DB_USER:-tracking_psep_user}
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-tracking}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Define RABBITMQ_PASSWORD en .env}
+      FLYWAY_ENABLED: "true"
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      DBA_API_KEY: ${DBA_API_KEY:-}
+      MAIL_ENABLED: "true"
+      MAIL_LOG_ACTION_LINKS: "true"
+      MAIL_FROM: no-reply@logistrack.local
+      MAIL_PROVIDER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_SMTP_AUTH: "false"
+      MAIL_SMTP_STARTTLS: "false"
+      OPERATIONS_TIME_ZONE: ${OPERATIONS_TIME_ZONE:-America/Bogota}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+volumes:
+  tracking_pgdata:
+    name: tracking_logistico_pgdata
+  tracking_rabbitdata:
+    name: tracking_logistico_rabbitdata

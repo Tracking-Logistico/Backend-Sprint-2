@@ -1,0 +1,153 @@
+# Tracking Logístico — Backend
+
+Proyecto Spring Boot modular (`usuarios`, `pedidos`, `rutas`). El backend y el frontend son repositorios independientes. El Docker Compose de este repositorio puede construir ambos cuando sus carpetas están al mismo nivel.
+
+## Ejecución local desde Java
+
+Con JDK 17 o superior, ejecuta `DemoApplication.java` directamente desde el IDE o inicia:
+
+```bash
+./mvnw spring-boot:run
+```
+
+El perfil predeterminado es `h2`. Hibernate crea y actualiza el esquema JPA en una base H2 en memoria; `db/h2/schema.sql` crea, después de JPA, las tablas auxiliares de historial de asignaciones y notificaciones utilizadas por JDBC. Al detener el proceso se pierde la información en memoria. No requiere Docker ni PostgreSQL. El correo saliente está desactivado por defecto en H2; puedes configurar `MAIL_ENABLED=true` y un servidor local si necesitas probarlo. H2 es un entorno de desarrollo, no una base equivalente a PostgreSQL para todas las consultas y restricciones.
+
+`src/main/resources/application.yml` contiene opciones comunes versionadas y activa H2 por defecto. `application-h2.properties`, `application-postgres.properties` y `application-test.properties` son perfiles versionados. El archivo `src/main/resources/application.properties` es opcional y está ignorado por Git: úsalo únicamente para ajustes privados de tu computador. Si existe, puede sobreescribir los valores de `application.yml`. No guardes credenciales en archivos versionados.
+
+## Docker local, PostgreSQL y frontend
+
+Ubica ambos repositorios como carpetas hermanas, con los nombres `tracking-logistico-backend-main` y `tracking-logistico-frontend-main`:
+
+```bash
+cd tracking-logistico-backend-main
+docker compose up --build
+```
+
+- Frontend: http://localhost:5173
+- Backend: http://localhost:8080
+- Swagger: http://localhost:8080/swagger-ui.html
+- Mailpit: http://localhost:8025
+- PostgreSQL local: puerto 5432; las credenciales de desarrollo están en `docker-compose.yml`.
+
+Docker selecciona explícitamente `postgres` con `SPRING_PROFILES_ACTIVE=postgres` y conserva las variables de entorno existentes, Flyway y `spring.jpa.hibernate.ddl-auto=validate`. El servicio publicado mediante este Dockerfile también utiliza PostgreSQL de forma explícita. No borres el volumen PostgreSQL si necesitas conservar sus datos; `docker compose down -v` los elimina. Si inicias el JAR fuera de este Dockerfile en Render u otro servidor, configura explícitamente `SPRING_PROFILES_ACTIVE=postgres` o `SPRING_PROFILE=postgres`, además de `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` y `DB_PASSWORD`. Verifica estas variables antes de desplegar: sin perfil explícito, el JAR utiliza H2.
+
+## PostgreSQL desde el IDE sin Docker
+
+Activa `postgres` desde la configuración de ejecución, con PostgreSQL funcionando y las variables de conexión:
+
+```bash
+SPRING_PROFILES_ACTIVE=postgres ./mvnw spring-boot:run
+```
+
+Si ejecutas solo el Main y quieres este perfil, configura `SPRING_PROFILES_ACTIVE=postgres` en tu IDE. No cambies el perfil local predeterminado de H2 para desplegar en producción.
+
+## Crear usuarios internos en Docker
+
+```bash
+docker compose exec backend java -jar app.jar --spring.profiles.active=postgres,cli crear --nombre='Operador Prueba' --email='operador@ejemplo.com' --telefono='+573001234567' --rol=OPERADOR --codigoEmpleado=OP001
+
+docker compose exec backend java -jar app.jar --spring.profiles.active=postgres,cli crear --nombre='Conductor Prueba' --email='conductor@ejemplo.com' --telefono='+573001234568' --rol=CONDUCTOR --licencia=LIC001
+```
+
+El CLI muestra una sola vez la contraseña temporal. Los endpoints administrativos requieren la cabecera `X-DBA-Key`. No reutilices las credenciales ni la clave de ejemplo de Compose en producción.
+
+## Pruebas
+
+```bash
+./mvnw test
+```
+
+Las pruebas utilizan `application-test.properties` con H2 y Hibernate `create-drop`. El esquema de pruebas crea las tablas JDBC auxiliares mediante `src/test/resources/import.sql`. Las migraciones PostgreSQL de Flyway no se modifican ni se ejecutan sobre H2. Para comprobar el comportamiento real en PostgreSQL, levanta Docker y prueba los endpoints y los flujos completos.
+
+## Pedidos asociados a una cuenta
+
+`GET /api/v1/pedidos/mios` requiere una sesión de cliente y devuelve una página de hasta 20 pedidos por defecto. Admite `page`, `size` (máximo 50), `sort=fechaCreacion,desc` o `sort=estado,asc`, además de los filtros opcionales `estado`, `fechaDesde=YYYY-MM-DD` y `fechaHasta=YYYY-MM-DD` (fechas de creación, ambas inclusive). La respuesta incluye número de pedido, tracking, remitente, destinatario, estado y fechas estimada y de creación. Un resultado vacío se representa con una página vacía para que el cliente muestre su estado vacío.
+
+Los pedidos se asocian al remitente autenticado al crearlos. Para que un destinatario con cuenta también los vea, se puede enviar `destinatarioEmail` al crear el pedido; el destinatario solo verá el pedido después de que el operador lo pase a `CREADO`. La fecha estimada se calcula al crear o corregir el pedido: 1 día calendario para `EXPRESS` y 3 para `ESTANDAR` y `PROGRAMADO`. `GET /api/v1/pedidos/mios/tracking/{numeroTracking}` devuelve para un envío de la cuenta el estado actual y sus movimientos logísticos, sin exponer datos de contacto o dirección del otro participante. El remitente también conserva los endpoints existentes `GET /api/v1/pedidos/tracking/{numeroTracking}` y `GET /api/v1/pedidos/{id}/historial`.
+
+## Checkpoints logísticos (HU-06) e incidencias (HU-07)
+
+Conductor (`CONDUCTOR`):
+
+- `POST /api/v1/pedidos/{id}/checkpoints`: registra el escaneo del QR de la etiqueta (`numeroTracking|checksum`) con etapa, coordenadas, precisión y `fechaDispositivo`. `idEventoCliente` (UUID generado por el dispositivo) hace idempotente el reenvío: 201 al crear, 200 si ya existía.
+- `POST /api/v1/pedidos/checkpoints/sincronizacion`: lote (máx. 100) de eventos capturados sin conexión; se procesan en orden de `fechaDispositivo` y los que chocan con el estado actual quedan `PENDIENTE_REVISION`. La cola local y el contador de pendientes viven en el frontend.
+- `GET /api/v1/pedidos/checkpoints/mios/pendientes-revision`.
+
+Operador (`OPERADOR`): `GET /api/v1/pedidos/novedades`, `GET /api/v1/pedidos/checkpoints/pendientes-revision`, `GET /api/v1/pedidos/incidencias/tipos`, `POST|GET /api/v1/pedidos/{id}/incidencias` (enviar `versionEsperada` para detectar cambios concurrentes).
+
+Cliente (`CLIENTE`): `GET /api/v1/pedidos/mios/tracking/{t}` incluye la novedad en lenguaje para el cliente; `GET .../reprogramacion/rango`, `POST .../reprogramacion` y `PUT .../direccion`.
+
+Parámetros: `app.checkpoints.precision-maxima-metros` (100), `app.shipment.retencion-bodega-dias` (7), `app.incidencias.max-intentos-entrega` (3), `app.incidencias.plazo-verificacion-direccion-dias-habiles` (3, lunes a viernes, sin festivos) y `app.incidencias.escalamiento-cron`.
+
+### Eventos para notificaciones (RabbitMQ)
+
+Los módulos publican eventos de dominio de Spring; un único adaptador (`config/messaging`) los reenvía, después del commit, al exchange topic `logistica.eventos` con `message-id = eventId` (los consumidores deben descartar duplicados por ese id). Routing keys: `pedido.checkpoint.registrado`, `pedido.checkpoint.pendiente-revision`, `pedido.incidencia.registrada`, `pedido.direccion.verificacion-solicitada`, `pedido.entrega.reprogramada`, `pedido.devolucion.iniciada`. Las colas las declara el módulo de notificaciones. RabbitMQ se activa con `RABBITMQ_ENABLED=true` (perfil `postgres`, por defecto) y está desactivado en H2 y pruebas, donde los eventos solo se registran en el log. Docker Compose incluye RabbitMQ con consola en http://localhost:15672.
+
+## Notificaciones automáticas (HU-11)
+
+Cuando un envío alcanza un **hito clave**, el cliente recibe automáticamente un correo
+y/o un SMS con el código de seguimiento y un enlace directo al portal de trazabilidad.
+
+### Hitos notificables
+
+| Estado / evento | Disparador | Mensaje |
+|---|---|---|
+| `EN_TRANSITO` | Checkpoint del conductor | "Tu paquete está en camino hacia la ciudad de destino." |
+| `EN_REPARTO` | Checkpoint del conductor | "Tu paquete salió a reparto y llegará hoy." |
+| `ENTREGADO` | Checkpoint del conductor | "Tu paquete fue entregado. ¡Gracias por confiar en nosotros!" |
+| `ENTREGA_FALLIDA` | Incidencia `CLIENTE_AUSENTE` | "No pudimos entregar tu paquete..." |
+| `ENTREGA_REPROGRAMADA` | Reprogramación del cliente | "Tu entrega fue reprogramada." |
+
+Eventos no notificables (informativos o internos) se descartan silenciosamente.
+El primer checkpoint `RECIBIDO_EN_ORIGEN` no notifica porque no es hito para el cliente.
+
+### Preferencias del cliente
+
+- `GET /api/v1/notificaciones/preferencias` (CLIENTE): devuelve canal actual (`EMAIL`, `SMS` o `AMBOS`).
+- `PUT /api/v1/notificaciones/preferencias` (CLIENTE): cambia canal y teléfono SMS.
+
+La ausencia de fila equivale a `EMAIL` por defecto. Las notificaciones críticas de
+seguridad de la cuenta (verificación, restablecimiento) **no** respetan esta preferencia
+y siempre se envían por correo.
+
+### Topología RabbitMQ
+
+```mermaid
+flowchart LR
+    EX[logistica.eventos<br/>topic] -- "pedido.#" --> Q[notification.queue]
+    Q -- fallo --> R[notification.retry.queue<br/>TTL 5s]
+    R -- "expira TTL<br/>vuelve a la cola" --> Q
+    Q -- "3 intentos agotados" --> DLQ[notification.dlq]
+```
+- **`notification.queue`**: consume todos los eventos `pedido.*` del exchange.
+- **`notification.retry.queue`**: TTL de 5s. Tras el TTL, el mensaje vuelve a la cola principal.
+- **`notification.dlq`**: mensajes que agotaron los 3 intentos. Se revisan manualmente.
+
+### Nota sobre SMS
+
+La implementación actual usa `SmsMockSender`, que solo escribe un log. Para integrar
+un proveedor real (Twilio) basta con:
+1. Añadir la dependencia al `pom.xml`.
+2. Crear `TwilioSmsSender implements SmsSenderI` con `@ConditionalOnProperty(name = "app.notifications.sms-provider", havingValue = "twilio")`.
+3. Configurar `app.notifications.sms-provider=twilio` y las credenciales.
+
+### HU - Panel del conductor: bajo consumo de datos
+
+El backend expone los endpoints necesarios para que el frontend consulte de
+forma incremental la información del panel:
+
+- `GET /api/v1/conductor/panel/entregas`
+- `GET /api/v1/conductor/panel/progreso`
+- `GET /api/v1/conductor/panel/siguiente`
+
+La estrategia de sincronización periódica va a ser responsabilidad del frontend. Al
+abrir el panel, el cliente carga la información inicial y luego consulta
+`/progreso` cada 20 o 30 segundos. Si detecta cambios en los contadores, vuelve
+a consultar las entregas y la siguiente parada.
+
+Después de registrar un checkpoint o una incidencia, el frontend puede
+actualizar inmediatamente la información sin esperar al siguiente ciclo.
+
+De esta forma, el frontend evita recargar toda la ruta en cada actualización y
+minimiza el consumo de datos en redes móviles limitadas. El backend conserva
+además el soporte de sincronización offline de checkpoints.

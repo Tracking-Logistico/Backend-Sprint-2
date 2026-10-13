@@ -1,0 +1,152 @@
+name: tracking-logistico
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-tracking_psep}
+      POSTGRES_USER: ${DB_USER:-tracking_psep_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Configura DB_PASSWORD en .env}
+    volumes:
+      - tracking_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-tracking}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Configura RABBITMQ_PASSWORD en .env}
+    volumes:
+      - tracking_rabbitdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
+
+  identidad:
+    build: ../tracking-identidad-api
+    env_file: .env
+    environment:
+      PORT: 8081
+      SPRING_PROFILE: postgres
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      FLYWAY_ENABLED: "true"
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      MAIL_PROVIDER: smtp
+      MAIL_FROM: ${MAIL_FROM:-no-reply@logistrack.local}
+      MAIL_ENABLED: ${MAIL_ENABLED:-true}
+      MAIL_SMTP_AUTH: "false"
+      MAIL_SMTP_STARTTLS: "false"
+    expose: ["8081"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "4", "http://127.0.0.1:8081/internal/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    restart: unless-stopped
+
+  envios:
+    build: ../tracking-envios-api
+    env_file: .env
+    environment:
+      PORT: 8082
+      SPRING_PROFILE: postgres
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      FLYWAY_ENABLED: "false"
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+    expose: ["8082"]
+    depends_on:
+      identidad:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "4", "http://127.0.0.1:8082/internal/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    restart: unless-stopped
+
+  rutas:
+    build: ../tracking-rutas-api
+    env_file: .env
+    environment:
+      PORT: 8083
+      SPRING_PROFILE: postgres
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      FLYWAY_ENABLED: "false"
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+    expose: ["8083"]
+    depends_on:
+      identidad:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--connect-timeout", "2", "--max-time", "4", "http://127.0.0.1:8083/internal/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    restart: unless-stopped
+
+  orquestador:
+    build: .
+    environment:
+      PORT: 8080
+      IDENTIDAD_API_URL: http://identidad:8081
+      ENVIOS_API_URL: http://envios:8082
+      RUTAS_API_URL: http://rutas:8083
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-http://localhost:5173}
+      GATEWAY_CONNECT_TIMEOUT_MS: ${GATEWAY_CONNECT_TIMEOUT_MS:-5000}
+      GATEWAY_REQUEST_TIMEOUT_MS: ${GATEWAY_REQUEST_TIMEOUT_MS:-60000}
+    ports:
+      - "${GATEWAY_BIND_ADDRESS:-0.0.0.0}:8080:8080"
+    depends_on:
+      identidad:
+        condition: service_healthy
+      envios:
+        condition: service_healthy
+      rutas:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  tracking_pgdata:
+    name: tracking_logistico_pgdata
+  tracking_rabbitdata:
+    name: tracking_logistico_rabbitdata

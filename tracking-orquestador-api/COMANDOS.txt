@@ -1,0 +1,9 @@
+# Ejecutar desde tracking-orquestador-api
+Copy-Item .env.example .env
+notepad .env
+docker compose config
+docker compose up -d --build --remove-orphans
+docker compose ps
+docker compose logs -f orquestador identidad envios rutas
+Invoke-WebRequest http://localhost:8080/health
+# No usar docker compose down -v si quieres conservar datos

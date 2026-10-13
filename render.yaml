@@ -1,0 +1,142 @@
+services:
+  - type: web
+    name: logistrack-identidad-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./tracking-identidad-api/Dockerfile
+    dockerContext: ./tracking-identidad-api
+    healthCheckPath: /internal/health
+    envVars:
+      - key: SPRING_PROFILE
+        value: postgres
+      - key: FLYWAY_ENABLED
+        value: "true"
+      - key: RABBITMQ_ENABLED
+        value: "false"
+      - key: MAIL_ENABLED
+        value: "false"
+      - key: MAIL_LOG_ACTION_LINKS
+        value: "true"
+      - key: SWAGGER_ENABLED
+        value: "true"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=55.0 -XX:+UseSerialGC -XX:ActiveProcessorCount=2"
+      - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+        value: "3"
+      - fromGroup: logistrack-demo-shared
+      - key: DB_HOST
+        fromDatabase: { name: logistrack-demo-pg, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: logistrack-demo-pg, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: logistrack-demo-pg, property: database }
+      - key: DB_USER
+        fromDatabase: { name: logistrack-demo-pg, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: logistrack-demo-pg, property: password }
+  - type: web
+    name: logistrack-envios-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./tracking-envios-api/Dockerfile
+    dockerContext: ./tracking-envios-api
+    healthCheckPath: /internal/health
+    envVars:
+      - key: SPRING_PROFILE
+        value: postgres
+      - key: FLYWAY_ENABLED
+        value: "false"
+      - key: RABBITMQ_ENABLED
+        value: "false"
+      - key: MAIL_ENABLED
+        value: "false"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=55.0 -XX:+UseSerialGC -XX:ActiveProcessorCount=2"
+      - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+        value: "3"
+      - fromGroup: logistrack-demo-shared
+      - key: DB_HOST
+        fromDatabase: { name: logistrack-demo-pg, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: logistrack-demo-pg, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: logistrack-demo-pg, property: database }
+      - key: DB_USER
+        fromDatabase: { name: logistrack-demo-pg, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: logistrack-demo-pg, property: password }
+  - type: web
+    name: logistrack-rutas-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./tracking-rutas-api/Dockerfile
+    dockerContext: ./tracking-rutas-api
+    healthCheckPath: /internal/health
+    envVars:
+      - key: SPRING_PROFILE
+        value: postgres
+      - key: FLYWAY_ENABLED
+        value: "false"
+      - key: RABBITMQ_ENABLED
+        value: "false"
+      - key: MAIL_ENABLED
+        value: "false"
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=55.0 -XX:+UseSerialGC -XX:ActiveProcessorCount=2"
+      - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+        value: "3"
+      - fromGroup: logistrack-demo-shared
+      - key: DB_HOST
+        fromDatabase: { name: logistrack-demo-pg, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: logistrack-demo-pg, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: logistrack-demo-pg, property: database }
+      - key: DB_USER
+        fromDatabase: { name: logistrack-demo-pg, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: logistrack-demo-pg, property: password }
+  - type: web
+    name: logistrack-orquestador-demo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./tracking-orquestador-api/Dockerfile
+    dockerContext: ./tracking-orquestador-api
+    healthCheckPath: /internal/health
+    envVars:
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=55.0 -XX:+UseSerialGC -XX:ActiveProcessorCount=2"
+      - key: DEMO_CORS_ALL_ORIGINS
+        value: "true"
+      - key: GATEWAY_REQUEST_TIMEOUT_MS
+        value: "120000"
+      - key: IDENTIDAD_API_URL
+        fromService: { type: web, name: logistrack-identidad-demo, envVarKey: RENDER_EXTERNAL_URL }
+      - key: ENVIOS_API_URL
+        fromService: { type: web, name: logistrack-envios-demo, envVarKey: RENDER_EXTERNAL_URL }
+      - key: RUTAS_API_URL
+        fromService: { type: web, name: logistrack-rutas-demo, envVarKey: RENDER_EXTERNAL_URL }
+  - type: web
+    name: logistrack-frontend-demo
+    runtime: static
+    buildCommand: cd tracking-logistico-frontend && npm ci && npm run build
+    staticPublishPath: ./tracking-logistico-frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_ORIGIN
+        fromService: { type: web, name: logistrack-orquestador-demo, envVarKey: RENDER_EXTERNAL_URL }
+
+databases:
+  - name: logistrack-demo-pg
+    plan: free
+    databaseName: tracking_psep
+    user: tracking_psep_user
+
+envVarGroups:
+  - name: logistrack-demo-shared
+    envVars:
+      - key: DBA_API_KEY
+        generateValue: true

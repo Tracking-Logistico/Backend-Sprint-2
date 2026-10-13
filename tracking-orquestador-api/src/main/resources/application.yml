@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: tracking-orquestador
+server:
+  address: 0.0.0.0
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+    include-stacktrace: never
+upstreams:
+  identidad: ${IDENTIDAD_API_URL:http://localhost:8081}
+  envios: ${ENVIOS_API_URL:http://localhost:8082}
+  rutas: ${RUTAS_API_URL:http://localhost:8083}
+app:
+  cors:
+    allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:5173}
+gateway:
+  connect-timeout-ms: ${GATEWAY_CONNECT_TIMEOUT_MS:5000}
+  request-timeout-ms: ${GATEWAY_REQUEST_TIMEOUT_MS:60000}

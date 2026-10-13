@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+    <defs>
+        <!-- Máscara para crear los cortes transparentes en el marcador de mapa -->
+        <mask id="pin-cutout">
+            <!-- Fondo blanco: mantiene visible todo lo que esté debajo -->
+            <rect width="512" height="512" fill="white" />
+            
+            <!-- Agujero central del marcador -->
+            <circle cx="200" cy="210" r="55" fill="black" />
+            
+            <!-- Corte con margen para el rastro de la flecha (Halo transparente) -->
+            <path d="M 90 320 C 170 330 240 250 295 185" fill="none" stroke="black" stroke-width="48" stroke-linecap="round"/>
+            <polygon points="280,170 345,145 310,215" fill="black" stroke="black" stroke-width="20" stroke-linejoin="round"/>
+        </mask>
+    </defs>
+
+    <!-- Contenedor principal centrado -->
+    <g transform="translate(0, -20)">
+        
+        <!-- 1. Marcador de Mapa (Verde Emerald-300) usando la máscara de recorte -->
+        <path d="M 200 90 C 133.7 90 80 143.7 80 210 C 80 285 180 410 200 430 C 220 410 320 285 320 210 C 320 143.7 266.3 90 200 90 Z" 
+              fill="#6ee7b7" 
+              mask="url(#pin-cutout)" />
+
+        <!-- 2. Flecha de Seguimiento Logístico (Negro) -->
+        <g id="tracking-arrow">
+            <!-- Eje curvado de la flecha -->
+            <path d="M 90 320 C 170 330 240 250 295 185" fill="none" stroke="#111827" stroke-width="28" stroke-linecap="round"/>
+            <!-- Punta de la flecha -->
+            <polygon points="280,170 345,145 310,215" fill="#111827"/>
+        </g>
+
+        <!-- 3. Paquete/Caja Isométrica (Multicolor) -->
+        <g id="package-box" stroke-linejoin="round">
+            <!-- Cara Superior (Verde Emerald-300) -->
+            <polygon points="380,85 425,107.5 380,130 335,107.5" fill="#6ee7b7" stroke="#111827" stroke-width="8"/>
+            <!-- Cara Izquierda (Negro) -->
+            <polygon points="335,107.5 380,130 380,175 335,152.5" fill="#111827" stroke="#111827" stroke-width="8"/>
+            <!-- Cara Derecha (Gris Pizarra Oscuro para dar sombreado 3D manteniendo el tono oscuro) -->
+            <polygon points="380,130 425,107.5 425,152.5 380,175" fill="#334155" stroke="#111827" stroke-width="8"/>
+        </g>
+    </g>
+
+    <!-- Texto del Logo (Centrado en la parte inferior) -->
+    <text x="256" y="475" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="60" font-weight="800" text-anchor="middle" letter-spacing="-1.5">
+        <tspan fill="#111827">logis</tspan><tspan fill="#6ee7b7">Track</tspan>
+    </text>
+
+</svg>
