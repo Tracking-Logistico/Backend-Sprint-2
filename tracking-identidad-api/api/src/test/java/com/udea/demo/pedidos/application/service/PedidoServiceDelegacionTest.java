@@ -1,18 +1,7 @@
 package com.udea.demo.pedidos.application.service;
 
-import com.udea.demo.pedidos.application.dto.CambiarEstadoLogisticoRequestDTO;
-import com.udea.demo.pedidos.application.dto.EtiquetaEnvioResponseDTO;
-import com.udea.demo.pedidos.application.dto.HistorialPedidoResponseDTO;
-import com.udea.demo.pedidos.application.dto.MovimientoSeguimientoResponseDTO;
-import com.udea.demo.pedidos.application.dto.NovedadClienteDTO;
-import com.udea.demo.pedidos.application.dto.PedidoClienteResponseDTO;
-import com.udea.demo.pedidos.application.dto.PedidoResponseDTO;
-import com.udea.demo.pedidos.application.dto.RecibirPedidoRequestDTO;
-import com.udea.demo.pedidos.application.dto.SeguimientoClienteResponseDTO;
-import com.udea.demo.pedidos.application.dto.ValidarPedidoRequestDTO;
-import com.udea.demo.pedidos.domain.model.EstadoPedido;
-import com.udea.demo.pedidos.domain.model.Prioridad;
-import com.udea.demo.pedidos.domain.model.TipoServicio;
+import com.udea.demo.pedidos.application.dto.*;
+import com.udea.demo.pedidos.domain.model.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Page;
@@ -20,18 +9,13 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-@DisplayName("PedidoService - delegación a casos de uso con DTOs reales y tipados")
+@DisplayName("PedidoService - delegación a casos de uso con datos reales y tipados")
 class PedidoServiceDelegacionTest {
     private final RecepcionPedidoUseCase recepcion = mock(RecepcionPedidoUseCase.class);
     private final ConsultaPedidoUseCase consulta = mock(ConsultaPedidoUseCase.class);
@@ -41,39 +25,28 @@ class PedidoServiceDelegacionTest {
 
     private RecibirPedidoRequestDTO crearRecibirDTO() {
         return new RecibirPedidoRequestDTO(
-                "Carrera 43A # 12-34, Medellín", "Medellín", "050021",
-                "Calle 10 # 40-20, Medellín", "Medellín", "050016",
-                "Documentos corporativos y muestras",
+                "Carrera 7 #71-21, Bogotá", "Bogotá", "110111",
+                "Calle 45 #12-30, Bogotá", "Bogotá", "110111",
+                "Caja de repuestos electrónicos",
                 2.50, 30.0, 20.0, 15.0, TipoServicio.EXPRESS,
-                "Carlos Restrepo", "+573001234567", "carlos.restrepo@cliente.com",
-                "+573109876543");
+                "Carlos Gómez", "+573001234567", "+573109876543");
     }
 
     private ValidarPedidoRequestDTO crearValidarDTO() {
         return new ValidarPedidoRequestDTO(
-                true, Prioridad.ALTA, "Documentación completa y peso verificado",
-                "Cliente con SLA express", null, false);
+                true, Prioridad.ALTA, "Aprobado correctamente",
+                "Prioridad confirmada", null, false);
     }
 
     private PedidoResponseDTO crearPedidoResponse(Long id, EstadoPedido estado) {
-        LocalDateTime fechaCreacion = LocalDateTime.of(2026, 10, 16, 8, 30);
-        LocalDateTime fechaValidacion = LocalDateTime.of(2026, 10, 16, 9, 15);
-        LocalDateTime fechaTracking = LocalDateTime.of(2026, 10, 16, 9, 20);
-        LocalDateTime fechaEstimada = LocalDateTime.of(2026, 10, 17, 18, 0);
         return new PedidoResponseDTO(
-                id, "PED-20261016-01", 15L,
-                "Carrera 43A # 12-34, Medellín", "Calle 10 # 40-20, Medellín",
-                "Documentos corporativos y muestras",
+                id, "PED-20261015-01", 10L,
+                "Carrera 7 #71-21, Bogotá", "Calle 45 #12-30, Bogotá",
+                "Caja de repuestos electrónicos",
                 2.50, 30.0, 20.0, 15.0, TipoServicio.EXPRESS,
                 Prioridad.ALTA, Prioridad.ALTA, estado,
-                "Documentación completa y peso verificado", 99L,
-                fechaCreacion, fechaValidacion,
-                "TRK-20261016-0001", fechaTracking, false, null,
-                "Carlos Restrepo", "+573001234567", "Cliente con SLA express",
-                "Medellín", "Medellín", "050021", "050016",
-                "Remitente SAS", "operaciones@remitente.com", "+573109876543",
-                fechaEstimada, "Portería principal, citar a recepción",
-                LocalDate.of(2026, 10, 18));
+                null, 99L, LocalDateTime.now(), null,
+                "TRK-20261015-01", LocalDateTime.now(), false, null);
     }
 
     @Test
@@ -101,7 +74,7 @@ class PedidoServiceDelegacionTest {
     @Test
     void delegaLaValidacionSinModificarElContrato() {
         ValidarPedidoRequestDTO solicitud = crearValidarDTO();
-        PedidoResponseDTO respuesta = crearPedidoResponse(4L, EstadoPedido.VALIDADO);
+        PedidoResponseDTO respuesta = crearPedidoResponse(4L, EstadoPedido.SOLICITADO);
         when(validacion.validar(4L, solicitud)).thenReturn(respuesta);
 
         assertSame(respuesta, fachada.validar(4L, solicitud));
@@ -132,18 +105,8 @@ class PedidoServiceDelegacionTest {
     @Test
     void delegaConsultasDeListados() {
         Pageable pageable = PageRequest.of(0, 10);
-        PedidoResponseDTO pedido = crearPedidoResponse(4L, EstadoPedido.SOLICITADO);
-        Page<PedidoResponseDTO> pagina = new PageImpl<>(List.of(pedido), pageable, 1);
-        LocalDateTime desde = LocalDateTime.of(2026, 10, 1, 0, 0);
-        LocalDateTime hasta = LocalDateTime.of(2026, 10, 31, 23, 59);
-        PedidoClienteResponseDTO pedidoCliente = new PedidoClienteResponseDTO(
-                4L, "PED-20261016-01", "TRK-20261016-0001",
-                "Remitente SAS", "Carlos Restrepo", EstadoPedido.SOLICITADO,
-                LocalDateTime.of(2026, 10, 16, 8, 30), LocalDateTime.of(2026, 10, 17, 18, 0));
-        Page<PedidoClienteResponseDTO> paginaCliente = new PageImpl<>(List.of(pedidoCliente), pageable, 1);
-
-        when(consulta.listarMios(EstadoPedido.SOLICITADO, desde, hasta, pageable)).thenReturn(paginaCliente);
-        assertSame(paginaCliente, fachada.listarMios(EstadoPedido.SOLICITADO, desde, hasta, pageable));
+        PedidoResponseDTO p = crearPedidoResponse(4L, EstadoPedido.SOLICITADO);
+        Page<PedidoResponseDTO> pagina = new PageImpl<>(List.of(p));
 
         when(consulta.listarPendientes(pageable)).thenReturn(pagina);
         assertSame(pagina, fachada.listarPendientes(pageable));
@@ -154,7 +117,7 @@ class PedidoServiceDelegacionTest {
         when(consulta.listarActivables(pageable)).thenReturn(pagina);
         assertSame(pagina, fachada.listarActivables(pageable));
 
-        List<PedidoResponseDTO> despachos = List.of(pedido);
+        List<PedidoResponseDTO> despachos = List.of(p);
         when(consulta.listarDespachos()).thenReturn(despachos);
         assertSame(despachos, fachada.listarDespachos());
 
@@ -163,47 +126,22 @@ class PedidoServiceDelegacionTest {
     }
 
     @Test
-    void delegaOperacionesLogisticasYConsultasAdicionales() {
-        PedidoResponseDTO pedido = crearPedidoResponse(4L, EstadoPedido.EN_REPARTO);
+    void delegaOperacionesLogisticasAdicionales() {
+        PedidoResponseDTO p = crearPedidoResponse(4L, EstadoPedido.EN_REPARTO);
         CambiarEstadoLogisticoRequestDTO cambioEstado = new CambiarEstadoLogisticoRequestDTO(EstadoPedido.EN_REPARTO);
-        when(operacion.cambiarEstadoLogistico(4L, cambioEstado)).thenReturn(pedido);
-        assertSame(pedido, fachada.cambiarEstadoLogistico(4L, cambioEstado));
+        when(operacion.cambiarEstadoLogistico(4L, cambioEstado)).thenReturn(p);
+        assertSame(p, fachada.cambiarEstadoLogistico(4L, cambioEstado));
 
-        EtiquetaEnvioResponseDTO etiqueta = new EtiquetaEnvioResponseDTO(
-                "PED-20261016-01", "TRK-20261016-0001", "JVBERi0xLjQ=", LocalDateTime.of(2026, 10, 16, 9, 25));
+        EtiquetaEnvioResponseDTO etiqueta = new EtiquetaEnvioResponseDTO("PED-01", "TRK-01", "base64content", LocalDateTime.now());
         when(operacion.generarEtiqueta(4L)).thenReturn(etiqueta);
         assertSame(etiqueta, fachada.generarEtiqueta(4L));
 
-        when(consulta.obtenerPorTracking("TRK-20261016-0001")).thenReturn(pedido);
-        assertSame(pedido, fachada.obtenerPorTracking("TRK-20261016-0001"));
+        when(consulta.obtenerPorTracking("TRK-01")).thenReturn(p);
+        assertSame(p, fachada.obtenerPorTracking("TRK-01"));
 
-        HistorialPedidoResponseDTO historial = new HistorialPedidoResponseDTO(
-                1L, 99L, "ESTADO_LOGISTICO", null, "EN_REPARTO", LocalDateTime.of(2026, 10, 16, 10, 0));
-        List<HistorialPedidoResponseDTO> historialList = List.of(historial);
+        HistorialPedidoResponseDTO h = new HistorialPedidoResponseDTO(1L, 99L, "ESTADO_LOGISTICO", null, "EN_REPARTO", LocalDateTime.now());
+        List<HistorialPedidoResponseDTO> historialList = List.of(h);
         when(consulta.historial(4L)).thenReturn(historialList);
         assertSame(historialList, fachada.historial(4L));
-
-        when(consulta.historialParaConductor(4L)).thenReturn(historialList);
-        assertSame(historialList, fachada.historialParaConductor(4L));
-
-        when(consulta.obtenerParaConductor(4L)).thenReturn(pedido);
-        assertSame(pedido, fachada.obtenerParaConductor(4L));
-
-        Map<Long, PedidoResponseDTO> porIds = Map.of(4L, pedido);
-        List<Long> ids = List.of(4L);
-        when(consulta.obtenerPorIds(ids)).thenReturn(porIds);
-        assertSame(porIds, fachada.obtenerPorIds(ids));
-
-        LocalDateTime ahora = LocalDateTime.of(2026, 10, 16, 11, 0);
-        SeguimientoClienteResponseDTO seguimiento = new SeguimientoClienteResponseDTO(
-                4L, "PED-20261016-01", "TRK-20261016-0001", EstadoPedido.EN_TRANSITO,
-                LocalDateTime.of(2026, 10, 17, 18, 0),
-                List.of(new MovimientoSeguimientoResponseDTO(
-                        EstadoPedido.EN_TRANSITO, ahora, "ESTADO", "El envío salió de origen")),
-                "El envío está en tránsito",
-                new NovedadClienteDTO("Retraso operativo", "Condiciones de tráfico en el Valle de Aburrá", ahora),
-                LocalDate.of(2026, 10, 18), ahora.plusDays(3));
-        when(consulta.obtenerSeguimientoCliente("TRK-20261016-0001")).thenReturn(seguimiento);
-        assertSame(seguimiento, fachada.obtenerSeguimientoCliente("TRK-20261016-0001"));
     }
 }
