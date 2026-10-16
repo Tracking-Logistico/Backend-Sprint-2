@@ -1,23 +1,28 @@
 package com.udea.demo;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest(properties = {"app.api.role=usuarios", "app.messaging.rabbitmq.enabled=false", "spring.flyway.enabled=false"})
+@SpringBootTest(properties = { "app.api.role=usuarios", "app.messaging.rabbitmq.enabled=false",
+        "spring.flyway.enabled=false" })
 @ActiveProfiles("test")
+@DisplayName("Verificación de límites de controladores en tracking-identidad-api")
 class LimitesApiTest {
-    @Autowired RequestMappingHandlerMapping rutas;
+    @Autowired
+    private RequestMappingHandlerMapping rutas;
 
     @Test
+    @DisplayName("Solo publica controladores pertenecientes al dominio de usuarios")
     void publicaUnicamenteControladoresPropios() {
         Set<String> paquetes = rutas.getHandlerMethods().values().stream()
                 .map(handler -> handler.getBeanType().getPackageName())

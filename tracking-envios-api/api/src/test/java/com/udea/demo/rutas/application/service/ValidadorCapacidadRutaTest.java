@@ -1,30 +1,37 @@
 package com.udea.demo.rutas.application.service;
 
 import com.udea.demo.pedidos.application.dto.PedidoResponseDTO;
+import com.udea.demo.pedidos.domain.model.EstadoPedido;
+import com.udea.demo.pedidos.domain.model.Prioridad;
+import com.udea.demo.pedidos.domain.model.TipoServicio;
 import com.udea.demo.usuarios.domain.model.Conductor;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import java.util.List;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+@DisplayName("ValidadorCapacidadRuta - límites de capacidad de entrega, peso y volumen")
 class ValidadorCapacidadRutaTest {
     private final ValidadorCapacidadRuta validador = new ValidadorCapacidadRuta();
 
     private Conductor conductor(int maximo, double peso, double volumen) {
-        Conductor conductor = mock(Conductor.class);
-        when(conductor.getMaxEntregasDia()).thenReturn(maximo);
-        when(conductor.getCapacidadMaxKg()).thenReturn(peso);
-        when(conductor.getCapacidadMaxVolumenCm3()).thenReturn(volumen);
-        return conductor;
+        return new Conductor(1L, null, "LIC-COL-2026", "ACTIVO", peso, volumen, maximo);
     }
 
     private PedidoResponseDTO pedido(double peso, double dimension) {
-        PedidoResponseDTO pedido = mock(PedidoResponseDTO.class);
-        when(pedido.pesoKg()).thenReturn(peso);
-        when(pedido.largoCm()).thenReturn(dimension);
-        when(pedido.anchoCm()).thenReturn(dimension);
-        when(pedido.altoCm()).thenReturn(dimension);
-        return pedido;
+        return new PedidoResponseDTO(
+                1L, "PED-20261015-01", 10L, "Carrera 7 #71-21, Bogotá", "Calle 45 #12-30, Bogotá",
+                "Caja de suministros", peso, dimension, dimension, dimension,
+                TipoServicio.ESTANDAR,
+                Prioridad.MEDIA,
+                Prioridad.MEDIA,
+                EstadoPedido.SOLICITADO,
+                null, null, LocalDateTime.now(), null,
+                "TRK-20261015-01", LocalDateTime.now(), false, null);
     }
 
     @Test
