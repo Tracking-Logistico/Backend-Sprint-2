@@ -11,16 +11,8 @@ on:
 
 jobs:
   build-and-analyze:
-    name: Build and Analyze (${{ matrix.service }})
+    name: Build and Analyze (monorepo)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service:
-          - tracking-envios-api
-          - tracking-identidad-api
-          - tracking-orquestador-api
-          - tracking-rutas-api
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,23 +26,14 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Make mvnw executable
-        run: chmod +x mvnw
-        working-directory: ${{ matrix.service }}
-
-      - name: Build and test with Maven
-        run: ./mvnw -B clean test jacoco:report
-        working-directory: ${{ matrix.service }}
-
-      - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@master
+      - name: Build, test y análisis Sonar (todos los módulos)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: ${{ matrix.service }}
-          args: >
-            -Dsonar.organization=tracklog20262
-            -Dsonar.projectKey=Tracking-Logistico_Sprint-2
-            -Dsonar.host.url=https://sonarcloud.io
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+        run: >
+          mvn -B clean verify
+          org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+          -Dsonar.organization=tracklog20262
+          -Dsonar.projectKey=Tracking-Logistico_Sprint-2
+          -Dsonar.host.url=https://sonarcloud.io
+          -Dsonar.qualitygate.wait=true
