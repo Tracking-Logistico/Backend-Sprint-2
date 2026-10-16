@@ -2,6 +2,8 @@ package com.udea.demo.rutas.application.service;
 
 import com.udea.demo.pedidos.application.dto.PedidoResponseDTO;
 import com.udea.demo.pedidos.domain.model.EstadoPedido;
+import com.udea.demo.pedidos.domain.model.Prioridad;
+import com.udea.demo.pedidos.domain.model.TipoServicio;
 import com.udea.demo.rutas.application.dto.AsignacionMasivaRequestDTO;
 import com.udea.demo.rutas.application.dto.AsignarEnvioRequestDTO;
 import com.udea.demo.rutas.application.dto.ReasignarEnvioRequestDTO;
@@ -16,8 +18,10 @@ import com.udea.demo.rutas.domain.model.Ruta;
 import com.udea.demo.rutas.interfaces.persistence.ParadaRutaRepository;
 import com.udea.demo.rutas.interfaces.persistence.RutaRepository;
 import com.udea.demo.rutas.interfaces.services.EnviosParaRutaPort;
-import com.udea.demo.soporte.DatosDePrueba;
 import com.udea.demo.usuarios.domain.model.Conductor;
+import com.udea.demo.usuarios.domain.model.EstadoUsuario;
+import com.udea.demo.usuarios.domain.model.Rol;
+import com.udea.demo.usuarios.domain.model.Usuario;
 import com.udea.demo.usuarios.interfaces.persistence.ConductorRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +36,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
@@ -65,6 +70,61 @@ class RutaServiceTest {
 
     private RutaService rutaService;
 
+    /** Crea un PedidoResponseDTO con los tipos reales del dominio. */
+    private PedidoResponseDTO pedido(Long id, EstadoPedido estado) {
+        return new PedidoResponseDTO(
+                id,
+                "PED-" + id,
+                100L,
+                "Calle 10 #20-30, Bogotá",
+                "Carrera 50 #80-15, Medellín",
+                "Caja de ropa",
+                5.0,
+                30.0,
+                20.0,
+                10.0,
+                TipoServicio.ESTANDAR,
+                Prioridad.MEDIA,
+                Prioridad.MEDIA,
+                estado,
+                null,
+                null,
+                LocalDateTime.of(2026, 10, 1, 9, 0),
+                null,
+                "TRK-" + id,
+                null,
+                false,
+                null
+        );
+    }
+
+    /** Crea un Usuario con rol CONDUCTOR activo. */
+    private Usuario usuarioConductor(Long id, String nombre) {
+        return Usuario.builder()
+                .id(id)
+                .nombre(nombre)
+                .email("conductor" + id + "@test.com")
+                .password("hash-seguro")
+                .rol(Rol.CONDUCTOR)
+                .estado(EstadoUsuario.ACTIVO)
+                .aceptoTerminos(Boolean.TRUE)
+                .activo(Boolean.TRUE)
+                .build();
+    }
+
+    /** Crea un Conductor con su Usuario asociado. */
+    private Conductor conductor(Long conductorId, Long usuarioId) {
+        return Conductor.builder()
+                .id(conductorId)
+                .usuario(usuarioConductor(usuarioId, "Conductor " + conductorId))
+                .licencia("LIC-" + conductorId)
+                .estado("ACTIVO")
+                .capacidadMaxKg(200.0)
+                .capacidadMaxVolumenCm3(2_000_000.0)
+                .maxEntregasDia(20)
+                .build();
+    }
+
     @BeforeEach
     void armarServicio() {
         RutaMapeador mapeador = new RutaMapeador(envios, conductores);
@@ -72,9 +132,9 @@ class RutaServiceTest {
                 mapeador, new ValidadorCapacidadRuta());
         ReflectionTestUtils.setField(rutaService, "zonaHoraria", ZONA);
         lenient().when(envios.obtener(any(Long.class)))
-                .thenAnswer(inv -> DatosDePrueba.pedido(inv.getArgument(0), EstadoPedido.EN_TRANSITO));
+                .thenAnswer(inv -> pedido(inv.getArgument(0), EstadoPedido.EN_TRANSITO));
         lenient().when(envios.cambiarEstadoLogistico(any(), any()))
-                .thenAnswer(inv -> DatosDePrueba.pedido(inv.getArgument(0), EstadoPedido.EN_REPARTO));
+                .thenAnswer(inv -> pedido(inv.getArgument(0), EstadoPedido.EN_REPARTO));
     }
 
     private LocalDate hoy() {
@@ -94,8 +154,8 @@ class RutaServiceTest {
     class ListarPendientes {
         @Test
         void omiteLosEnviosQueYaTienenParadaPendiente() {
-            PedidoResponseDTO libre = DatosDePrueba.pedido(PEDIDO_ID, EstadoPedido.EN_TRANSITO);
-            PedidoResponseDTO asignado = DatosDePrueba.pedido(20L, EstadoPedido.EN_TRANSITO);
+            PedidoResponseDTO libre = pedido(PEDIDO_ID, EstadoPedido.EN_TRANSITO);
+            PedidoResponseDTO asignado = pedido(20L, EstadoPedido.EN_TRANSITO);
             when(paradas.findPedidoIdsByEstado(EstadoParada.PENDIENTE)).thenReturn(List.of(20L));
             when(envios.listarEnTransito(PAGINA)).thenReturn(new PageImpl<>(List.of(libre, asignado), PAGINA, 2));
 
@@ -119,13 +179,13 @@ class RutaServiceTest {
         @Test
         void asociaElPedidoALaRutaDelConductor() {
             AsignarEnvioRequestDTO dto = new AsignarEnvioRequestDTO(PEDIDO_ID, USUARIO_CONDUCTOR);
-            Conductor conductor = DatosDePrueba.conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
+            Conductor conductorObj = conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
             Ruta ruta = Ruta.crear(CONDUCTOR_INTERNO, hoy());
             when(paradas.findByPedidoIdAndEstado(PEDIDO_ID, EstadoParada.PENDIENTE)).thenReturn(Optional.empty());
-            when(conductores.findByUsuarioIdForUpdate(USUARIO_CONDUCTOR)).thenReturn(Optional.of(conductor));
+            when(conductores.findByUsuarioIdForUpdate(USUARIO_CONDUCTOR)).thenReturn(Optional.of(conductorObj));
             when(gestor.obtenerOCrear(CONDUCTOR_INTERNO)).thenReturn(ruta);
             when(rutas.saveAndFlush(any(Ruta.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(conductores.findById(CONDUCTOR_INTERNO)).thenReturn(Optional.of(conductor));
+            when(conductores.findById(CONDUCTOR_INTERNO)).thenReturn(Optional.of(conductorObj));
 
             RutaResponseDTO resultado = rutaService.asignarEnvio(dto);
 
@@ -162,10 +222,10 @@ class RutaServiceTest {
             Long pedidoB = 20L;
             Long pedidoC = 30L;
             Ruta ruta = rutaConParadas(CONDUCTOR_INTERNO, PEDIDO_ID, pedidoB, pedidoC);
-            Conductor conductor = DatosDePrueba.conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
+            Conductor conductorObj = conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
             when(rutas.findById(RUTA_ID)).thenReturn(Optional.of(ruta));
             when(rutas.save(any(Ruta.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(conductores.findById(CONDUCTOR_INTERNO)).thenReturn(Optional.of(conductor));
+            when(conductores.findById(CONDUCTOR_INTERNO)).thenReturn(Optional.of(conductorObj));
 
             RutaResponseDTO resultado = rutaService.reordenarRuta(RUTA_ID,
                     new ReordenarRutaRequestDTO(List.of(pedidoC, pedidoB, PEDIDO_ID)));
@@ -188,8 +248,8 @@ class RutaServiceTest {
         @Test
         void transfiereElEnvioAlNuevoConductor() {
             ReasignarEnvioRequestDTO dto = new ReasignarEnvioRequestDTO(PEDIDO_ID, USUARIO_NUEVO, "Cambio de zona");
-            Conductor origen = DatosDePrueba.conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
-            Conductor destino = DatosDePrueba.conductor(CONDUCTOR_NUEVO, USUARIO_NUEVO);
+            Conductor origen = conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
+            Conductor destino = conductor(CONDUCTOR_NUEVO, USUARIO_NUEVO);
             Ruta rutaOrigen = rutaConParadas(CONDUCTOR_INTERNO, PEDIDO_ID);
             ParadaRuta parada = rutaOrigen.getParadas().get(0);
             Ruta rutaDestino = Ruta.crear(CONDUCTOR_NUEVO, hoy());
@@ -197,7 +257,7 @@ class RutaServiceTest {
             when(conductores.findById(CONDUCTOR_INTERNO)).thenReturn(Optional.of(origen));
             when(conductores.findByUsuarioIdForUpdate(USUARIO_NUEVO)).thenReturn(Optional.of(destino));
             when(gestor.obtenerOCrear(CONDUCTOR_NUEVO)).thenReturn(rutaDestino);
-            when(envios.obtener(PEDIDO_ID)).thenReturn(DatosDePrueba.pedido(PEDIDO_ID, EstadoPedido.EN_REPARTO));
+            when(envios.obtener(PEDIDO_ID)).thenReturn(pedido(PEDIDO_ID, EstadoPedido.EN_REPARTO));
             when(rutas.saveAndFlush(any(Ruta.class))).thenAnswer(inv -> inv.getArgument(0));
             when(conductores.findById(CONDUCTOR_NUEVO)).thenReturn(Optional.of(destino));
 
@@ -222,11 +282,11 @@ class RutaServiceTest {
     class RutaActiva {
         @Test
         void devuelveLaRutaDelDia() {
-            Conductor conductor = DatosDePrueba.conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
+            Conductor conductorObj = conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
             Ruta ruta = rutaConParadas(CONDUCTOR_INTERNO, PEDIDO_ID);
-            when(conductores.findByUsuarioId(USUARIO_CONDUCTOR)).thenReturn(Optional.of(conductor));
+            when(conductores.findByUsuarioId(USUARIO_CONDUCTOR)).thenReturn(Optional.of(conductorObj));
             when(rutas.findByConductorIdAndFecha(CONDUCTOR_INTERNO, hoy())).thenReturn(Optional.of(ruta));
-            when(conductores.findById(CONDUCTOR_INTERNO)).thenReturn(Optional.of(conductor));
+            when(conductores.findById(CONDUCTOR_INTERNO)).thenReturn(Optional.of(conductorObj));
 
             RutaResponseDTO resultado = rutaService.obtenerRutaActivaDeConductor(USUARIO_CONDUCTOR);
 
@@ -236,8 +296,8 @@ class RutaServiceTest {
 
         @Test
         void fallaSiNoHayRutaActiva() {
-            Conductor conductor = DatosDePrueba.conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
-            when(conductores.findByUsuarioId(USUARIO_CONDUCTOR)).thenReturn(Optional.of(conductor));
+            Conductor conductorObj = conductor(CONDUCTOR_INTERNO, USUARIO_CONDUCTOR);
+            when(conductores.findByUsuarioId(USUARIO_CONDUCTOR)).thenReturn(Optional.of(conductorObj));
             when(rutas.findByConductorIdAndFecha(CONDUCTOR_INTERNO, hoy())).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> rutaService.obtenerRutaActivaDeConductor(USUARIO_CONDUCTOR))

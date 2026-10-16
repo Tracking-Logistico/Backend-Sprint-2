@@ -6,13 +6,14 @@ import com.udea.demo.pedidos.domain.model.EstadoPedido;
 import com.udea.demo.pedidos.domain.model.EtapaCheckpoint;
 import com.udea.demo.pedidos.domain.model.OrigenCheckpoint;
 import com.udea.demo.pedidos.domain.model.Pedido;
+import com.udea.demo.pedidos.domain.model.Prioridad;
+import com.udea.demo.pedidos.domain.model.TipoServicio;
 import com.udea.demo.pedidos.domain.model.UbicacionReportada;
 import com.udea.demo.rutas.domain.model.EstadoParada;
 import com.udea.demo.rutas.domain.model.ParadaRuta;
 import com.udea.demo.rutas.domain.model.Ruta;
 import com.udea.demo.rutas.interfaces.persistence.ParadaRutaRepository;
 import com.udea.demo.rutas.interfaces.persistence.RutaRepository;
-import com.udea.demo.soporte.DatosDePrueba;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +39,32 @@ class MarcarParadaEntregadaListenerTest {
     @Mock private RutaRepository rutas;
     @InjectMocks private MarcarParadaEntregadaListener listener;
 
+    /** Construye un Pedido con los tipos reales del dominio usando el builder. */
+    private Pedido entidadPedido(Long id, EstadoPedido estado) {
+        return Pedido.builder()
+                .id(id)
+                .numeroPedido("PED-" + id)
+                .clienteId(100L)
+                .direccionOrigen("Calle 10 #20-30, Bogotá")
+                .ciudadOrigen("Bogotá")
+                .codigoPostalOrigen("110111")
+                .direccionDestino("Carrera 50 #80-15, Medellín")
+                .ciudadDestino("Medellín")
+                .codigoPostalDestino("050001")
+                .descripcionPaquete("Caja de ropa")
+                .pesoKg(5.0)
+                .largoCm(30.0)
+                .anchoCm(20.0)
+                .altoCm(10.0)
+                .tipoServicio(TipoServicio.ESTANDAR)
+                .prioridadSugerida(Prioridad.MEDIA)
+                .estado(estado)
+                .fechaCreacion(LocalDateTime.of(2026, 10, 1, 9, 0))
+                .numeroTracking("TRK-" + id)
+                .etiquetaImpresa(false)
+                .build();
+    }
+
     private CheckpointRegistradoEvent evento(Pedido pedido, EstadoPedido estadoActual) {
         CheckpointPedido checkpoint = CheckpointPedido.aplicado(
                 pedido.getId(), 5L, "evt-" + pedido.getId(), EtapaCheckpoint.ENTREGADO,
@@ -50,7 +77,7 @@ class MarcarParadaEntregadaListenerTest {
 
     @Test
     void marcaLaParadaCuandoElEstadoEsEntregado() {
-        Pedido pedido = DatosDePrueba.entidadPedido(7L, EstadoPedido.EN_REPARTO);
+        Pedido pedido = entidadPedido(7L, EstadoPedido.EN_REPARTO);
         Ruta ruta = Ruta.crear(1L, LocalDate.now());
         ParadaRuta parada = ruta.agregarParada(pedido.getId());
         when(paradas.findByPedidoIdAndEstado(pedido.getId(), EstadoParada.PENDIENTE)).thenReturn(Optional.of(parada));
@@ -63,7 +90,7 @@ class MarcarParadaEntregadaListenerTest {
 
     @Test
     void ignoraCheckpointsQueNoCierranLaEntrega() {
-        Pedido pedido = DatosDePrueba.entidadPedido(7L, EstadoPedido.EN_REPARTO);
+        Pedido pedido = entidadPedido(7L, EstadoPedido.EN_REPARTO);
 
         listener.alRegistrarCheckpoint(evento(pedido, EstadoPedido.EN_REPARTO));
 
