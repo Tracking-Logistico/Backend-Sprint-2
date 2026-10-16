@@ -4,6 +4,9 @@
  <parent><groupId>com.udea</groupId><artifactId>tracking-envios-api-parent</artifactId><version>0.0.1-SNAPSHOT</version></parent>
  <artifactId>tracking-envios-api-core</artifactId>
  <packaging>jar</packaging>
+ <properties>
+  <sonar.coverage.jacoco.xmlReportPaths>${project.basedir}/../api/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+ </properties>
  <dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
