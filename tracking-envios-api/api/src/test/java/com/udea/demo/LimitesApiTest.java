@@ -1,21 +1,23 @@
 package com.udea.demo;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(properties = {"app.api.role=pedidos", "app.messaging.rabbitmq.enabled=false", "spring.flyway.enabled=false"})
 @ActiveProfiles("test")
+@DisplayName("Límites de la API - publicación exclusiva de controladores del módulo")
 class LimitesApiTest {
-    @Autowired RequestMappingHandlerMapping rutas;
+    @Autowired private RequestMappingHandlerMapping rutas;
 
     @Test
     void publicaUnicamenteControladoresPropios() {

@@ -5,13 +5,21 @@ on:
     branches:
       - main
       - master
+      - preparetest_sprint2
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
   build-and-analyze:
-    name: Build and Analyze
+    name: Build and Analyze (${{ matrix.service }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - tracking-envios-api
+          - tracking-identidad-api
+          - tracking-orquestador-api
+          - tracking-rutas-api
 
     steps:
       - name: Checkout code
@@ -28,10 +36,11 @@ jobs:
 
       - name: Make mvnw executable
         run: chmod +x mvnw
-
+        working-directory: ${{ matrix.service }}
 
       - name: Build and test with Maven
         run: ./mvnw -B clean test jacoco:report
+        working-directory: ${{ matrix.service }}
 
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@master
@@ -39,8 +48,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
+          projectBaseDir: ${{ matrix.service }}
           args: >
             -Dsonar.organization=tracklog20262
-            -Dsonar.projectKey=Tracking-Logistico_tracking-logistico-backend
+            -Dsonar.projectKey=Tracking-Logistico_Sprint-2
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
